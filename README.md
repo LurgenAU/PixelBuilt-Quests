@@ -1,6 +1,9 @@
 ## PixelBuiltQuests
 PixelBuilt-Quests (or PBQ) is a fully customizable quests plugin that was initially made for the PixelBuilt server. It contains several possibilities for quest requirements, tasks, rewards and etc. Follow the wiki to learn how to create a working setup of PBQ.
 
+### Why this fork?
+The main PBQ is a bit generous with information provided to the player. Details such as coordinates (for visit tasks) are revealed directly, making it difficult (impossible?) to rely on clues and signposts to guide a player. This fork adjusts the user interactions ever so slightly.
+
 ### Features
 * Fully configurable quests, quest lines, tasks, rewards, messages and more!
 * Storytelling support - have NPCs tell stories by adding an interval between messages!
