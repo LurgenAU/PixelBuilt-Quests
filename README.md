@@ -21,6 +21,9 @@ To start using this plugin, take a look on the [wiki page](https://github.com/Eu
 ### Support
 If you have any issues running the plugin, you're free to open a ticket in the issues tab and I'll take a look on it asap! If you have questions about the plugin, feel free to join my Discord server: https://discord.gg/YttMwEr
 
+### Support The Original Author!
+If you like the plugin and would like to support the guy who did most of the work you can donate to his paypal: eufraniow@gmail.com. If you want to talk with him directly, his Discord tag is Eufranio#0800
+
 ### Support Me!
-If you like the plugin and would like to support me, you can donate via my paypal: eufraniow@gmail.com. If you want to talk with me directly, my Discord tag is Eufranio#0800
+These udpates were made to support LurgNet, a small Australian-based Minecraft community. You can find us on most of the server listing sites, and are welcome to pay us a visit.
 
