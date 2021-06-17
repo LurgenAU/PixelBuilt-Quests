@@ -38,7 +38,7 @@ public class Quest {
     @Setting
     public String displayName = "First Quest";
 
-    @Setting
+	@Setting
     public List<String> startMessages = Lists.newArrayList("&aYou're starting a Quest, %player%!");
 
     @Setting
@@ -90,6 +90,10 @@ public class Quest {
     public void setId(int id) {
         this.id = id;
     }
+    
+    public String getDisplayName() {
+		return displayName;
+	}
 
     public BaseTask getTask(int id) {
         return this.tasks.stream()
