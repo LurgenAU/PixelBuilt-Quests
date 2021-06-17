@@ -31,155 +31,169 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class BaseQuestExecutor implements QuestExecutor {
 
-    UUID player;
-    Quest quest;
-    QuestLine questLine;
-    PlayerData playerData;
+	UUID player;
+	Quest quest;
+	QuestLine questLine;
+	PlayerData playerData;
 
-    @Override
-    public void execute(Quest quest, QuestLine questLine, Player player) {
-        this.quest = quest;
-        this.questLine = questLine;
-        this.player = player.getUniqueId();
-        this.playerData = PixelBuiltQuests.getStorage().getData(this.player);
+	@Override
+	public void execute(Quest quest, QuestLine questLine, Player player) {
+		this.quest = quest;
+		this.questLine = questLine;
+		this.player = player.getUniqueId();
+		this.playerData = PixelBuiltQuests.getStorage().getData(this.player);
 
-        if (playerData.hasStarted(questLine, quest)) {
-            this.run();
-        } else {
-            if (this.start() && quest.runUponStart)
-                this.run();
-        }
-    }
+		if (playerData.hasStarted(questLine, quest)) {
+			this.run();
+		} else {
+			if (this.start() && quest.runUponStart)
+				this.run();
+		}
+	}
 
-    public boolean start() {
-        Player player = this.getPlayer();
-        if (!quest.repeatable && playerData.hasRan(questLine, quest)) {
-            player.sendMessage(Util.toText(ConfigManager.getConfig().messages.hasRan));
-            return false;
-        }
+	public boolean start() {
+		Player player = this.getPlayer();
+		if (!quest.repeatable && playerData.hasRan(questLine, quest)) {
+			player.sendMessage(Util.toText(ConfigManager.getConfig().messages.hasRan));
+			return false;
+		}
 
-        if (quest.cooldown) {
-            Duration cooldown = Duration.parse("PT" + quest.cooldownDuration);
-            Instant lastRan = playerData.getLastRan(questLine, quest);
-            if (lastRan != null) {
-                Instant nextRun = lastRan.plusSeconds(cooldown.getSeconds());
-                if (Instant.now().isBefore(nextRun)) {
-                    long seconds = Instant.now().until(nextRun, ChronoUnit.SECONDS);
-                    String cooldownMessage = ConfigManager.getConfig().messages.cooldown
-                            .replace("%cooldown%", Util.timeDiffFormat(seconds, true));
-                    player.sendMessage(Util.toText(cooldownMessage));
-                    return false;
-                }
-            }
-        }
+		if (quest.cooldown) {
+			Duration cooldown = Duration.parse("PT" + quest.cooldownDuration);
+			Instant lastRan = playerData.getLastRan(questLine, quest);
+			if (lastRan != null) {
+				Instant nextRun = lastRan.plusSeconds(cooldown.getSeconds());
+				if (Instant.now().isBefore(nextRun)) {
+					long seconds = Instant.now().until(nextRun, ChronoUnit.SECONDS);
+					String cooldownMessage = ConfigManager.getConfig().messages.cooldown.replace("%cooldown%",
+							Util.timeDiffFormat(seconds, true));
+					player.sendMessage(Util.toText(cooldownMessage));
+					return false;
+				}
+			}
+		}
 
-        List<Text> text = Lists.newArrayList();
-        quest.startMessages.forEach(str -> 
-        	text.add(Util.toText(str.replace("%player%", player.getName())))
-        );
-        
-        PaginationList.builder()
-	        .padding(Text.of(TextColors.WHITE, TextStyles.STRIKETHROUGH, "-"))
-	        .title(Util.toText("&a" + quest.getDisplayName()))
-	        .contents(text)
-	        .sendTo(player);
-        
-        
-        playerData.startQuest(questLine, quest);
-        PixelBuiltQuests.getStorage().save(playerData);
+		PaginationList.builder().padding(Text.of(TextColors.WHITE, TextStyles.STRIKETHROUGH, "-"))
+				.title(Util.toText("&a" + quest.getDisplayName())).contents(Util.toText("")).sendTo(player);
 
-        return true;
-    }
+		PixelBuiltQuests.runningQuests.add(player.getUniqueId());
+		
+		if (quest.denyMovement) {
+			if (!PixelBuiltQuests.playersBusy.contains(player.getUniqueId()))
+				PixelBuiltQuests.playersBusy.add(player.getUniqueId());
+		}
 
+		if (quest.timeBetweenMessages == 0 || quest.startMessages.isEmpty()) {
+			quest.startMessages
+					.forEach(str -> player.sendMessage(Util.toText(str.replace("%player%", player.getName()))));
+			this.continueTask();
+		} else {
+			AtomicInteger count = new AtomicInteger();
+			for (int i = 0; i < quest.startMessages.size(); i++) {
+				final int j = i;
+				Task.builder().delay(count.getAndAdd(quest.timeBetweenMessages), TimeUnit.SECONDS).execute(() -> {
+					Player pl = this.getPlayer();
+					if (pl != null) {
+						pl.sendMessage(Util.toText(quest.startMessages.get(j).replace("%player%", pl.getName())));
+					}
+					if (j == quest.startMessages.size() - 1) {
+						Task.builder().delay(quest.timeBetweenMessages, TimeUnit.SECONDS).execute(this::continueTask)
+								.submit(PixelBuiltQuests.getInstance());
+					}
+				}).submit(PixelBuiltQuests.getInstance());
+			}
+		}
 
-    public void run() {
-        List<Text> toComplete = Lists.newArrayList();
-        for (ValueWrapper<? extends BaseTask> v : this.quest.tasks) {
-            BaseTask task = v.getValue();
+		playerData.startQuest(questLine, quest);
+		PixelBuiltQuests.getStorage().save(playerData);
 
-            if (!task.isCompleted(playerData, questLine, quest)) {
-                if (task instanceof AmountTask) {
-                    AmountTask amountTask = (AmountTask) task;
-                    amountTask.tryIncrease(playerData, playerData.getOrCreateStatus(amountTask, questLine, quest));
-                }
+		return true;
+	}
 
-                if (!task.isCompleted(playerData, questLine, quest))
-                    toComplete.add(task.toText());
-            }
-        }
+	public void run() {
+		List<Text> toComplete = Lists.newArrayList();
+		for (ValueWrapper<? extends BaseTask> v : this.quest.tasks) {
+			BaseTask task = v.getValue();
 
-        final Player player = this.getPlayer();
-        if (!toComplete.isEmpty()) {
-            player.sendMessage(Text.of(Util.toText(ConfigManager.getConfig().messages.notAllTasksCompleted), Text.joinWith(Text.of(", "), toComplete)));
-            String hintText = ConfigManager.getConfig().messages.notAllTasksCompletedHint;
-            if (!hintText.isEmpty())
-                player.sendMessage(Util.toText(hintText));
-            return;
-        }
+			if (!task.isCompleted(playerData, questLine, quest)) {
+				if (task instanceof AmountTask) {
+					AmountTask amountTask = (AmountTask) task;
+					amountTask.tryIncrease(playerData, playerData.getOrCreateStatus(amountTask, questLine, quest));
+				}
 
-        PixelBuiltQuests.runningQuests.add(player.getUniqueId());
+				if (!task.isCompleted(playerData, questLine, quest))
+					toComplete.add(task.toText());
+			}
+		}
 
-        // Add player to the list of busy players
-        if (quest.denyMovement) {
-            if (!PixelBuiltQuests.playersBusy.contains(player.getUniqueId()))
-                PixelBuiltQuests.playersBusy.add(player.getUniqueId());
-        }
+		final Player player = this.getPlayer();
+		if (!toComplete.isEmpty()) {
+			player.sendMessage(Text.of(Util.toText(ConfigManager.getConfig().messages.notAllTasksCompleted),
+					Text.joinWith(Text.of(", "), toComplete)));
+			String hintText = ConfigManager.getConfig().messages.notAllTasksCompletedHint;
+			if (!hintText.isEmpty())
+				player.sendMessage(Util.toText(hintText));
+			return;
+		}
 
-        if (quest.timeBetweenMessages == 0 || quest.messages.isEmpty()) {
-            quest.messages.forEach(str -> player.sendMessage(Util.toText(str.replace("%player%", player.getName()))));
-            this.continueTask();
-        } else {
-            AtomicInteger count = new AtomicInteger();
-            for (int i = 0; i < quest.messages.size(); i++) {
-                final int j = i;
-                Task.builder()
-                        .delay(count.getAndAdd(quest.timeBetweenMessages), TimeUnit.SECONDS)
-                        .execute(() -> {
-                            Player pl = this.getPlayer();
-                            if (pl != null) {
-                                pl.sendMessage(Util.toText(quest.messages.get(j).replace("%player%", pl.getName())));
-                            }
-                            if (j == quest.messages.size() - 1) {
-                                Task.builder()
-                                        .delay(quest.timeBetweenMessages, TimeUnit.SECONDS)
-                                        .execute(this::continueTask)
-                                        .submit(PixelBuiltQuests.getInstance());
-                            }
-                        })
-                        .submit(PixelBuiltQuests.getInstance());
-            }
-        }
-    }
+		PixelBuiltQuests.runningQuests.add(player.getUniqueId());
 
-    public void continueTask() {
-        // those don't need the player online to execute
-        PixelBuiltQuests.playersBusy.remove(player);
-        PixelBuiltQuests.runningQuests.remove(player);
+		// Add player to the list of busy players
+		if (quest.denyMovement) {
+			if (!PixelBuiltQuests.playersBusy.contains(player.getUniqueId()))
+				PixelBuiltQuests.playersBusy.add(player.getUniqueId());
+		}
 
-        Player player = this.getPlayer();
-        if (player == null) return;
+		if (quest.timeBetweenMessages == 0 || quest.messages.isEmpty()) {
+			quest.messages.forEach(str -> player.sendMessage(Util.toText(str.replace("%player%", player.getName()))));
+			this.continueTask();
+		} else {
+			AtomicInteger count = new AtomicInteger();
+			for (int i = 0; i < quest.messages.size(); i++) {
+				final int j = i;
+				Task.builder().delay(count.getAndAdd(quest.timeBetweenMessages), TimeUnit.SECONDS).execute(() -> {
+					Player pl = this.getPlayer();
+					if (pl != null) {
+						pl.sendMessage(Util.toText(quest.messages.get(j).replace("%player%", pl.getName())));
+					}
+					if (j == quest.messages.size() - 1) {
+						Task.builder().delay(quest.timeBetweenMessages, TimeUnit.SECONDS).execute(this::continueTask)
+								.submit(PixelBuiltQuests.getInstance());
+					}
+				}).submit(PixelBuiltQuests.getInstance());
+			}
+		}
+	}
 
-        // refresh data that might have been changed since last query
-        playerData.refreshData();
+	public void continueTask() {
+		// those don't need the player online to execute
+		PixelBuiltQuests.playersBusy.remove(player);
+		PixelBuiltQuests.runningQuests.remove(player);
 
-        for (ValueWrapper<? extends BaseTask> v : this.quest.tasks) {
-            BaseTask task = v.getValue();
-            if (task instanceof AmountTask)
-                playerData.getStatus((AmountTask) task, questLine, quest)
-                        .ifPresent(playerData.status::remove);
-            // clear the previous progress of this quest, so it can be restarted
-        }
+		Player player = this.getPlayer();
+		if (player == null)
+			return;
 
-        for (ValueWrapper<? extends BaseReward<?>> v : this.quest.rewards) {
-            BaseReward<?> reward = v.getValue();
-            reward.execute(playerData, questLine, quest);
-        }
+		// refresh data that might have been changed since last query
+		playerData.refreshData();
 
-        playerData.addQuest(this.questLine, this.quest);
-        PixelBuiltQuests.getStorage().save(playerData);
-    }
+		for (ValueWrapper<? extends BaseTask> v : this.quest.tasks) {
+			BaseTask task = v.getValue();
+			if (task instanceof AmountTask)
+				playerData.getStatus((AmountTask) task, questLine, quest).ifPresent(playerData.status::remove);
+			// clear the previous progress of this quest, so it can be restarted
+		}
 
-    private Player getPlayer() {
-        return Sponge.getServer().getPlayer(this.player).orElse(null);
-    }
+		for (ValueWrapper<? extends BaseReward<?>> v : this.quest.rewards) {
+			BaseReward<?> reward = v.getValue();
+			reward.execute(playerData, questLine, quest);
+		}
+
+		playerData.addQuest(this.questLine, this.quest);
+		PixelBuiltQuests.getStorage().save(playerData);
+	}
+
+	private Player getPlayer() {
+		return Sponge.getServer().getPlayer(this.player).orElse(null);
+	}
 }
