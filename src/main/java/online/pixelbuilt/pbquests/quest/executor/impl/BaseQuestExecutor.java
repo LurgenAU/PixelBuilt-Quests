@@ -16,8 +16,10 @@ import online.pixelbuilt.pbquests.utils.Util;
 import org.spongepowered.api.Sponge;
 import org.spongepowered.api.entity.living.player.Player;
 import org.spongepowered.api.scheduler.Task;
+import org.spongepowered.api.service.pagination.PaginationList;
 import org.spongepowered.api.text.Text;
 import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.text.format.TextStyles;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -71,12 +73,24 @@ public class BaseQuestExecutor implements QuestExecutor {
             }
         }
 
-        quest.startMessages.forEach(str -> player.sendMessage(Util.toText(str.replace("%player%", player.getName()))));
+        List<Text> text = Lists.newArrayList();
+        quest.startMessages.forEach(str -> 
+        	text.add(Util.toText(str.replace("%player%", player.getName())))
+        );
+        
+        PaginationList.builder()
+	        .padding(Text.of(TextColors.WHITE, TextStyles.STRIKETHROUGH, "-"))
+	        .title(Util.toText("&a" + quest.getDisplayName()))
+	        .contents(text)
+	        .sendTo(player);
+        
+        
         playerData.startQuest(questLine, quest);
         PixelBuiltQuests.getStorage().save(playerData);
 
         return true;
     }
+
 
     public void run() {
         List<Text> toComplete = Lists.newArrayList();

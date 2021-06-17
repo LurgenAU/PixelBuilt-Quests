@@ -98,4 +98,8 @@ public class Quest {
                 .findFirst()
                 .orElse(null);
     }
+
+	public String getDisplayName() {
+		return displayName;
+	}
 }
