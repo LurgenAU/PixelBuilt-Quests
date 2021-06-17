@@ -73,8 +73,10 @@ public class BaseQuestExecutor implements QuestExecutor {
 			}
 		}
 
-		PaginationList.builder().padding(Text.of(TextColors.WHITE, TextStyles.STRIKETHROUGH, "-"))
-				.title(Util.toText("&a" + quest.getDisplayName())).contents(Util.toText("")).sendTo(player);
+		if(!quest.getDisplayName().isEmpty()) {
+			PaginationList.builder().padding(Text.of(TextColors.WHITE, TextStyles.STRIKETHROUGH, "-"))
+					.title(Util.toText("&a" + quest.getDisplayName())).contents(Util.toText("")).sendTo(player);
+		}
 
 		PixelBuiltQuests.runningQuests.add(player.getUniqueId());
 		
